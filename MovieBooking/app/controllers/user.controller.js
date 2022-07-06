@@ -1,174 +1,144 @@
-const db = require("../models");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcrypt");
-
-const User = db.users;
+const User = require('../models').user;
+const { v4: uuid } = require('uuid');
+const TokenGenerator = require('uuid-token-generator');
+const { btoa, atob } = require('b2a');
+const tokgen = new TokenGenerator(TokenGenerator.BASE62);
 
 exports.signUp = (req, res) => {
-  if (!req.body.email && !req.body.password) {
-    res
-      .status(400)
-      .send({ message: "Please provide email and password to continue." });
-    return;
-  }
 
-  const email = req.body.email;
-
-  if (email == "admin1@upgrad.com" || email == "admin2@upgrad.com") {
-    res.status(400).send({ message: "Sorry, You cannot register as ADMIN." });
-    return;
-  }
-
-  const filter = { email: email };
-  User.findOne(filter, (err, user) => {
-    if (err || user === null) {
-      const salt = bcrypt.genSaltSync(10);
-      const hash = bcrypt.hashSync(req.body.password, salt);
-
-      console.log(req.body.password);
-      console.log(hash);
-
-      const user = new User({
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        email: email,
-        password: hash,
-        role: req.body.role ? req.body.role : "user",
-        isLoggedIn: true,
-      });
-      user
-        .save(user)
-        .then((data) => {
-          res.send(data);
-        })
-        .catch((err) => {
-          res.status(500).send({
-            message:
-              err.message || "Some error occurred, please try again later.",
-          });
+    if (!req.body.email || !req.body.password) {
+        res.status(400).send({
+            message: "Please provide emailId and password to continue.",
         });
-    } else {
-      res.status(400).send({
-        message: "User Already Exists.",
-      });
+        return;
     }
-  });
+
+    const filter = { email: req.body.email };
+    const username = btoa(req.body.first_name + req.body.last_name);
+    const password = btoa(req.body.password);
+    const token = tokgen.generate();
+    console.log(token);
+    const newUuid = uuid();
+
+    User.findOne(filter, (err, user) => {
+        if (!err && user === null) {
+            //create user object
+            const user = new User({
+                userid: req.body.userid,
+                email: req.body.email,
+                first_name: req.body.first_name,
+                last_name: req.body.last_name,
+                username: username,
+                contact: req.body.contact,
+                password: password,
+                role: req.body.role ? req.body.role : "user",
+                isLoggedIn: false,
+                uuid: newUuid,
+                accessToken: token,
+            });
+
+            user.save(user)
+                .then(data => {
+                    res.status(200).send(data);
+                })
+                .catch(err => {
+                    res.status(500).send(err);
+                })
+        } else {
+            res.status(400).send({ message: "User already exists" });
+        }
+    });
 };
 
 exports.login = (req, res) => {
-  const email = req.body.email;
-  const password = req.body.password;
-
-  if (!email && !password) {
-    res
-      .status(400)
-      .send({ message: "Please provide email and password to continue." });
-    return;
-  }
-
-  const filter = { email: email };
-  User.findOne(filter, (err, user) => {
-    if (err || user === null) {
-      res.status(401).send({
-        message: "Email or password not correct.",
-      });
-    } else {
-      console.log(bcrypt.compareSync(password, user.password));
-
-      if (bcrypt.compareSync(password, user.password)) {
-        user.isLoggedIn = true;
-
-        User.findOneAndUpdate(filter, user, { useFindAndModify: false })
-          .then((data) => {
-            if (!data) {
-              res.status(404).send({
-                message: "Some error occurred, please try again later.",
-              });
-            } else {
-              const token = jwt.sign({ _id: data._id }, "myprivatekey");
-              data.accesstoken = token;
-              res.send(data);
-            }
-          })
-          .catch((err) => {
-            res.status(500).send({
-              message: "Error updating.",
-            });
-          });
-      } else {
-        res.status(401).send({
-          message: "Email or password not correct.",
+    if (!req.body.email || !req.body.password) {
+        res.status(400).send({
+            message: "Please provide email id and password to continue.",
         });
-      }
+        return;
     }
-  });
+    const filter = { email: req.body.email };
+
+    User.findOne(filter, (err, user) => {
+        if (user === null) {
+            res.status(401).send({ message: "User Not Found. Please Register" });
+            return;
+        } else {
+            if (user.password === req.body.password) {
+                user.isLoggedIn = true;
+                User.findOneAndUpdate(filter, user)
+                    .then((data) => {
+                        res.send(data);
+                    })
+                    .catch((err) => {
+                        res.status(500).send({
+                            message: "Some error occurred.",
+                        });
+                    });
+            } else {
+                res.status(401).send({
+                    message: "Incorrect Password. Please Try Again",
+                });
+            }
+        }
+    });
 };
 
 exports.logout = (req, res) => {
-  if (!req.body.id) {
-    res.status(400).send({ message: "Please provide user Id." });
-    return;
-  }
+    if (!req.body.userid) {
+        res.status(400).send({ message: "User ID not provided" });
+        return;
+    }
 
-  const id = req.body.id;
-  const update = { isLoggedIn: false };
+    const filter = { userid: req.body.userid };
+    User.findOne(filter, (err, user) => {
+        if (user === null) {
+            res.status(401).send({ message: "User ID does not exist" });
+            return;
+        } else {
+            user.isLoggedIn = false;
 
-  User.findByIdAndUpdate(id, update)
-    .then((data) => {
-      if (!data) {
-        res.status(404).send({
-          message: "Some error occurred, please try again later.",
-        });
-      } else res.send({ message: "Logged Out successfully." });
-    })
-    .catch((err) => {
-      res.status(500).send({
-        message: "Error updating.",
-      });
+            User.findOneAndUpdate(filter, user)
+                .then(data => {
+                    res.send(data);
+                })
+                .catch(err => {
+                    res.status(500).send({ message: "Some Error occurred" });
+                });
+        }
     });
 };
 
 exports.getCouponCode = (req, res) => {
-  if (!req.body.coupens) {
-    res.status(400).send({ message: "Please provide a valid Coupon." });
-    return;
-  }
-
-  const coupens = req.body.coupens;
-
-  User.findByCoupons(coupens, update)
-    .then((data) => {
-      if (!data) {
-        res.status(404).send({
-          message: "Some error occurred, please try again later.",
+    const user = req.query.userid;
+    User.find({ userid: user }).select("coupons")
+        .then(data => {
+            res.send(data);
+        })
+        .catch(err => {
+            res.status(500).send({ message: "Some error occurred while fetching coupons" });
         });
-      } else res.send({ message: "Coupen Passed Succesfully" });
-    })
-    .catch((err) => {
-      res.status(500).send({
-        message: "Error updating.",
-      });
-    });
 };
+
 exports.bookShow = (req, res) => {
-  if (!req.body.coupens) {
-    res.status(400).send({ message: "Please provide a valid bookShow." });
-    return;
-  }
-
-  const bookingRequests = req.body.bookingRequests;
-
-  User.findByCoupons(bookingRequests, update)
-    .then((data) => {
-      if (!data) {
-        res.status(404).send({
-          message: "Some error occurred, please try again later.",
-        });
-      } else res.send({ message: "Booked" });
-    })
-    .catch((err) => {
-      res.status(500).send({
-        message: "Error updating.",
-      });
+    if (!req.body.userid && !req.body.bookingRequests) {
+        res.status(400).send({ message: "User ID or Booking Requests not provided" });
+        return;
+    }
+    const filter = { userid: req.body.userid };
+    User.findOne(filter, (err, user) => {
+        if (user === null) {
+            res.status(401).send({ message: "User does not exist" });
+            return;
+        } else {
+            user.bookingRequests = req.body.bookingRequests;
+            User.findOneAndUpdate(filter, user)
+                .then(data => {
+                    res.send(data);
+                })
+                .catch(err => {
+                    res.status(500).send({ message: "Some Error Occurred while creating Booking Request" });
+                })
+        }
     });
 };

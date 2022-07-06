@@ -1,12 +1,13 @@
-const db = require("../models");
-const Artist = db.artists;
+const Artist = require("../models").artist;
 
-async function findAllArtists(req,res){
-  const data= await db.artists.find({});
-  //console.log(data);
-  res.json(data);
-}
-
-module.exports={
-  findAllArtists
-}
+exports.findAllArtists = (req, res) => {
+  Artist.find({})
+    .then(data => {
+      res.send(data);
+    })
+    .catch((err) => {
+      res.status(500).send({
+        message: "Some Error Occurred while fetching artists",
+      });
+    });
+};

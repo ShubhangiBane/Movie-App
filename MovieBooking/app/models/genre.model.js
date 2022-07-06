@@ -1,15 +1,13 @@
 module.exports = (mongoose) => {
   const Genre = mongoose.model(
-    "genres",
+    "genre",
     mongoose.Schema(
       {
-        genreid: { type: Number, required: true },
-        genre: { type: String, required: true },
-        
+        genreid: Number,
+        genre: String,
       },
-
+      { timestamps: true }
     )
   );
-
   return Genre;
 };

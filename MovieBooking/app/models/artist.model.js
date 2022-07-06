@@ -1,22 +1,21 @@
 module.exports = (mongoose) => {
   const Artist = mongoose.model(
     "artist",
-    mongoose.Schema({
-      artistid: { type: Number, required: true },
-      firstName: { type: String, required: true },
-      lastName: String,
-      wiki_url: {
-        type: String,
+    mongoose.Schema(
+      {
+        artistid: Number,
+        first_name: String,
+        last_name: String,
+        wiki_url: String,
+        profile_url: String,
+        movies: [
+          {
+            type: String,
+          },
+        ],
       },
-      profile_url: { type: String, required: true },
-
-      movies: [
-        {
-          type: String,
-        },
-      ],
-    })
+      { timestamps: true }
+    )
   );
-
   return Artist;
 };
